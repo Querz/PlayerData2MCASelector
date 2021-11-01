@@ -2,9 +2,7 @@ package net.querz.playerdata2mcaselector;
 
 import net.querz.nbt.io.NBTUtil;
 import net.querz.nbt.io.NamedTag;
-import net.querz.nbt.tag.CompoundTag;
-import net.querz.nbt.tag.DoubleTag;
-import net.querz.nbt.tag.ListTag;
+import net.querz.nbt.tag.*;
 import java.io.*;
 import java.nio.file.Files;
 import java.util.HashMap;
@@ -13,6 +11,14 @@ import java.util.Map;
 import java.util.Set;
 
 public class Main {
+
+	private static final Map<String, Integer> dimMap = new HashMap<>();
+
+	static {
+		dimMap.put("minecraft:overworld", 0);
+		dimMap.put("minecraft:the_end", 1);
+		dimMap.put("minecraft:nether", -1);
+	}
 
 	public static void main(String[] args) throws IOException {
 
@@ -52,7 +58,21 @@ public class Main {
 				NamedTag data = NBTUtil.read(playerFile);
 				CompoundTag root = (CompoundTag) data.getTag();
 				ListTag<DoubleTag> pos = root.getListTag("Pos").asDoubleTagList();
-				int dim = root.getInt("Dimension");
+				Tag<?> dimTag = root.get("Dimension");
+				int dim;
+				if (dimTag instanceof IntTag) {
+					dim = root.getInt("Dimension");
+				} else if (dimTag instanceof StringTag) {
+					if (dimMap.containsKey(root.getString("Dimension"))) {
+						dim = dimMap.get(root.getString("Dimension"));
+					} else {
+						System.out.println("invalid Dimension " + root.getString("Dimension"));
+						continue;
+					}
+				} else {
+					System.out.println("invalid Dimension tag type " + dimTag.getID());
+					continue;
+				}
 
 				Map<Point2i, Set<Point2i>> regions = selections.computeIfAbsent(dim, k -> new HashMap<>());
 
