@@ -7,7 +7,9 @@ import net.querz.nbt.tag.DoubleTag;
 import net.querz.nbt.tag.ListTag;
 import java.io.*;
 import java.nio.file.Files;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 public class Main {
@@ -42,38 +44,59 @@ public class Main {
 			throw new FileNotFoundException("no player files found in " + inputDir);
 		}
 
-		Set<Point2i> chunks = new HashSet<>();
+		Map<Integer, Map<Point2i, Set<Point2i>>> selections = new HashMap<>();
+		int totalChunks = 0;
 
-		try (BufferedWriter bw = new BufferedWriter(new FileWriter(output))) {
-			for (File playerFile : playerFiles) {
-				try {
-					NamedTag data = NBTUtil.read(playerFile);
-					CompoundTag root = (CompoundTag) data.getTag();
-					ListTag<DoubleTag> pos = root.getListTag("Pos").asDoubleTagList();
+		for (File playerFile : playerFiles) {
+			try {
+				NamedTag data = NBTUtil.read(playerFile);
+				CompoundTag root = (CompoundTag) data.getTag();
+				ListTag<DoubleTag> pos = root.getListTag("Pos").asDoubleTagList();
+				int dim = root.getInt("Dimension");
 
-					Point2i block = new Point2i(pos.get(0).asInt(), pos.get(2).asInt());
-					Point2i chunk = block.blockToChunk();
+				Map<Point2i, Set<Point2i>> regions = selections.computeIfAbsent(dim, k -> new HashMap<>());
 
-					for (int x = chunk.getX() - radius; x < chunk.getX() + radius + 1; x++) {
-						for (int z = chunk.getZ() - radius; z < chunk.getZ() + radius + 1; z++) {
-							Point2i inRadius = new Point2i(x, z);
+				Point2i block = new Point2i(pos.get(0).asInt(), pos.get(2).asInt());
+				Point2i chunk = block.blockToChunk();
 
-							if (chunks.contains(inRadius)) {
-								continue;
-							}
-							chunks.add(inRadius);
-
-							Point2i region = inRadius.chunkToRegion();
-
-							bw.write(String.format("%d;%d;%d;%d\n", region.getX(), region.getZ(), inRadius.getX(), inRadius.getZ()));
+				for (int x = chunk.getX() - radius; x < chunk.getX() + radius + 1; x++) {
+					for (int z = chunk.getZ() - radius; z < chunk.getZ() + radius + 1; z++) {
+						Point2i inRadius = new Point2i(x, z);
+						Point2i region = inRadius.chunkToRegion();
+						Set<Point2i> chunks = regions.computeIfAbsent(region, k -> new HashSet<>());
+						if (chunks.add(inRadius)) {
+							totalChunks++;
 						}
 					}
-				} catch (Exception ex) {
-					ex.printStackTrace();
+				}
+			} catch (Exception ex) {
+				ex.printStackTrace();
+			}
+		}
+
+		for (Map.Entry<Integer, Map<Point2i, Set<Point2i>>> dimension : selections.entrySet()) {
+			String fileName = output.getName();
+			if (selections.size() > 1) {
+				fileName = output.getName().substring(0, output.getName().length() - 4) + "_DIM" + dimension.getKey() + ".csv";
+			}
+
+			try (BufferedWriter bw = new BufferedWriter(new FileWriter(new File(output.getParentFile(), fileName)))) {
+
+				for (Map.Entry<Point2i, Set<Point2i>> selection : dimension.getValue().entrySet()) {
+					Point2i region = selection.getKey();
+
+					if (selection.getValue().size() == 1024) {
+						bw.write(String.format("%d;%d\n", region.getX(), region.getZ()));
+						continue;
+					}
+
+					for (Point2i chunk : selection.getValue()) {
+						bw.write(String.format("%d;%d;%d;%d\n", region.getX(), region.getZ(), chunk.getX(), chunk.getZ()));
+					}
 				}
 			}
 		}
 
-		System.out.println("created selection with " + chunks.size() + " chunks.");
+		System.out.println("created selection with " + totalChunks + " chunks.");
 	}
 }
