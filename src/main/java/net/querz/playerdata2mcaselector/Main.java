@@ -17,7 +17,7 @@ public class Main {
 	static {
 		dimMap.put("minecraft:overworld", 0);
 		dimMap.put("minecraft:the_end", 1);
-		dimMap.put("minecraft:nether", -1);
+		dimMap.put("minecraft:the_nether", -1);
 	}
 
 	public static void main(String[] args) throws IOException {
